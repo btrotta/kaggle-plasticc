@@ -30,4 +30,5 @@ Total runtime is around 5.5 hours on a 24 Gb laptop.
 
 - Run `predict.py` to train the model and make predictions on the test set. Takes around 1.5 hours.
 
-- Run `scale.py` to apply regularisation to the class 99 predictions and generate the final submission file.
+- Run `scale.py` to apply regularisation to the class 99 predictions and generate the final submission file. 
+  Takes a couple of minutes.
