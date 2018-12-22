@@ -2,7 +2,7 @@
 
 Code for the 14th place solution in the Kaggle PLAsTiCC competition. 
 
-See `Readme.pdf` for a detailed discussion of the modelling approach.
+See `Modelling_approach.pdf` for a detailed discussion of the modelling approach.
 
 #### Quick-start guide to running the code
 
