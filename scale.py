@@ -2,13 +2,14 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+import os
 
 
 # read raw predictions
-prediction = pd.read_csv('Prediction_raw_181215_1818.csv', dtype={'object_id': np.int32})
+prediction = pd.read_csv('Prediction_raw.csv', dtype={'object_id': np.int32})
 col_dict = {'mjd': np.float64, 'flux': np.float32, 'flux_err': np.float32, 'object_id': np.int32, 'passband': np.int8,
             'detected': np.int8}
-test_meta = pd.read_csv('data\\test_set_metadata.csv', dtype=col_dict)
+test_meta = pd.read_csv(os.path.join('data', 'test_set_metadata.csv'), dtype=col_dict)
 test_meta['galactic'] = test_meta['hostgal_photoz'] == 0
 test_meta['exact'] = test_meta['hostgal_specz'].notnull()
 prediction = pd.merge(prediction, test_meta[['object_id', 'galactic', 'exact']], 'left', 'object_id')

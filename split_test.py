@@ -5,12 +5,12 @@ import pandas as pd
 import os
 
 n_chunks = 100
-if not os.path.exists('data\\split_{}'.format(n_chunks)):
-    os.mkdir('data\\split_{}'.format(n_chunks))
+if not os.path.exists(os.path.join('data', 'split_{}'.format(n_chunks))):
+    os.mkdir(os.path.join('data', 'split_{}'.format(n_chunks)))
 
 col_dict = {'mjd': np.float64, 'flux': np.float32, 'flux_err': np.float32, 'object_id': np.int32, 'passband': np.int8,
             'detected': np.int8}
-test = pd.read_csv('data\\test_set.csv', dtype=col_dict)
+test = pd.read_csv(os.path.join('data', 'test_set.csv'), dtype=col_dict)
 test.sort_values('object_id', inplace=True)
 test = test.reset_index()
 test_len = len(test)
@@ -22,5 +22,6 @@ for i in range(n_chunks):
         end = len(test)
     else:
         end = chunk_starts[i + 1]
-    test.iloc[chunk_starts[i]: end - 1].to_hdf('data\\split_{}\\chunk_{}.hdf5'.format(n_chunks, i), key='file0')
+    test.iloc[chunk_starts[i]: end - 1].to_hdf(os.path.join('data', 'split_{}'.format(n_chunks),
+                                                            'chunk_{}.hdf5'.format(i)), key='file0')
 

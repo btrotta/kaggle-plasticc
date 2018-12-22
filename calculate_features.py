@@ -1,16 +1,14 @@
 import pandas as pd
 import numpy as np
-from sklearn import metrics, model_selection
-import lightgbm as lgb
-import datetime as dt
 import gc
 import os
+
 
 # read data
 col_dict = {'mjd': np.float64, 'flux': np.float32, 'flux_err': np.float32, 'object_id': np.int32, 'passband': np.int8,
             'detected': np.int8}
-train_meta = pd.read_csv('data\\training_set_metadata.csv')
-train = pd.read_csv('data\\training_set.csv', dtype=col_dict)
+train_meta = pd.read_csv(os.path.join('data', 'training_set_metadata.csv'))
+train = pd.read_csv(os.path.join('data', 'training_set.csv'), dtype=col_dict)
 
 
 def calc_aggs(all_data, exact):
@@ -23,8 +21,10 @@ def calc_aggs(all_data, exact):
     prior_std = all_data.groupby(['object_id', 'passband'])['flux'].transform('std')
     prior_std.loc[prior_std.isnull()] = all_data.loc[prior_std.isnull(), 'flux_err']
     obs_std = all_data['flux_err']  # since the above kernel tells us that the flux error is the 68% confidence interval
-    all_data['bayes_flux'] = (all_data['flux'] / obs_std**2 + prior_mean / prior_std**2) / (1 / obs_std **2 + 1 / prior_std **2)
-    all_data.loc[all_data['bayes_flux'].notnull(), 'flux'] = all_data.loc[all_data['bayes_flux'].notnull(), 'bayes_flux']
+    all_data['bayes_flux'] = (all_data['flux'] / obs_std**2 + prior_mean / prior_std**2) \
+                             / (1 / obs_std**2 + 1 / prior_std**2)
+    all_data.loc[all_data['bayes_flux'].notnull(), 'flux'] \
+        = all_data.loc[all_data['bayes_flux'].notnull(), 'bayes_flux']
 
     # Estimate the flux at source, using the fact that light is proportional
     # to inverse square of distance from source.
@@ -32,7 +32,8 @@ def calc_aggs(all_data, exact):
     redshift = all_meta.set_index('object_id')[['hostgal_specz', 'hostgal_photoz']]
     if exact:
         redshift['redshift'] = redshift['hostgal_specz']
-        redshift.loc[redshift['redshift'].isnull(), 'redshift'] = redshift.loc[redshift['redshift'].isnull(), 'hostgal_photoz']
+        redshift.loc[redshift['redshift'].isnull(), 'redshift'] \
+            = redshift.loc[redshift['redshift'].isnull(), 'hostgal_photoz']
     else:
         redshift['redshift'] = redshift['hostgal_photoz']
     all_data = pd.merge(all_data, redshift, 'left', 'object_id')
@@ -56,13 +57,13 @@ def calc_aggs(all_data, exact):
     quantiles.columns = [str(x) + '_' + str(y) + '_quantile' for x in quantiles.columns.levels[0]
                          for y in quantiles.columns.levels[1]]
 
-    # max flux detected flux
+    # max detected flux
     max_detected = all_data.loc[all_data['detected'] == 1].groupby('object_id')['flux'].max().to_frame('max_detected')
 
     def most_extreme(df_in, k, positive=True, suffix='', include_max=True, include_dur=True, include_interval=False):
-        df = df_in.copy()
         # find the "most extreme" time for each object, and for each band, retrieve the k data points on either side
         # k points before
+        df = df_in.copy()
         df['object_passband_mean'] = df.groupby(['object_id', 'passband'])['flux'].transform('median')
         if positive:
             df['dist_from_mean'] = (df['flux'] - df['object_passband_mean'])
@@ -97,13 +98,13 @@ def calc_aggs(all_data, exact):
                 interval_arr.append(interval_agg)
             interval_data = pd.concat(interval_arr, axis=1)
             extreme_data = pd.concat([extreme_data, interval_data], axis=1)
-
         if include_dur:
             # detection duration in each passband after event
             duration_after = df.loc[(df['time_after_mjd_max'] >= 0) & (df['detected'] == 0)] \
                 .groupby(['object_id', 'passband'])['time_after_mjd_max'].first().unstack(-1)
             duration_after.columns = ['dur_after_' + str(c) for c in range(6)]
             extreme_data = pd.concat([extreme_data, duration_after], axis=1)
+
         # last k before event
         df.sort_values(['object_id', 'passband', 'time_before_mjd_max'], inplace=True)
         df['row_num_before'] = df.loc[df['time_before_mjd_max'] >= 0].groupby(
@@ -121,6 +122,7 @@ def calc_aggs(all_data, exact):
                 .groupby(['object_id', 'passband'])['time_before_mjd_max'].first().unstack(-1)
             duration_before.columns = ['dur_before_' + str(c) for c in range(6)]
             extreme_data = pd.concat([extreme_data, duration_before], axis=1)
+
         if include_max:
             # passband with maximum detected flux for each object
             max_pb = df.loc[max_time['max_ind'].values].groupby('object_id')['passband'].max().to_frame(
@@ -135,10 +137,12 @@ def calc_aggs(all_data, exact):
                 band_mjd_max[c] -= band_mjd_max['mjd_max' + suffix]
             band_mjd_max.drop(['mjd_max' + suffix, 'max_ind'], axis=1, inplace=True)
             extreme_data = pd.concat([extreme_data, max_pb, band_mjd_max], axis=1)
+
         extreme_data.columns = [c + suffix for c in extreme_data.columns]
         return extreme_data
 
-    extreme_max = most_extreme(all_data, 1, positive=True, suffix='', include_max=True, include_dur=True, include_interval=True)
+    extreme_max = most_extreme(all_data, 1, positive=True, suffix='', include_max=True, include_dur=True,
+                               include_interval=True)
     extreme_min = most_extreme(all_data, 1, positive=False, suffix='_min', include_max=False, include_dur=True)
 
     # add the feature mentioned here, attempts to identify periodicity:
@@ -167,9 +171,11 @@ def calc_aggs(all_data, exact):
                           for y in det_aggs.columns.levels[1]]
 
     # time distribution of detections in each band
-    detection_time_dist = all_data.loc[all_data['detected'] == 1].groupby(['object_id', 'passband'])['mjd'].std().unstack(-1)
+    detection_time_dist \
+        = all_data.loc[all_data['detected'] == 1].groupby(['object_id', 'passband'])['mjd'].std().unstack(-1)
     detection_time_dist.columns = ['time_dist_' + str(i) for i in range(6)]
-    detection_time_dist_all = all_data.loc[all_data['detected'] == 1].groupby(['object_id'])['mjd'].std().to_frame('time_dist')
+    detection_time_dist_all \
+        = all_data.loc[all_data['detected'] == 1].groupby(['object_id'])['mjd'].std().to_frame('time_dist')
 
     # scale data and recalculate band aggs
     all_data['abs_flux'] = all_data['flux'].abs()
@@ -185,7 +191,8 @@ def calc_aggs(all_data, exact):
     quantiles_s.columns = [str(x) + '_' + str(y) + '_quantile_s' for x in quantiles_s.columns.levels[0]
                           for y in quantiles_s.columns.levels[1]]
 
-    extreme_max_s = most_extreme(all_data, 1, positive=True, suffix='_s', include_max=False, include_dur=False, include_interval=True)
+    extreme_max_s = most_extreme(all_data, 1, positive=True, suffix='_s', include_max=False, include_dur=False,
+                                 include_interval=True)
     extreme_min_s = most_extreme(all_data, 1, positive=False, suffix='_min_s', include_max=False, include_dur=False)
 
     new_data = pd.concat([band_aggs, quantiles, band_aggs_s, max_detected, time_between_detections[['det_period']],
@@ -195,13 +202,13 @@ def calc_aggs(all_data, exact):
     return new_data
 
 
-
 # get the metadata
-test_meta = pd.read_csv('data\\test_set_metadata.csv')
+test_meta = pd.read_csv(os.path.join('data', 'test_set_metadata.csv'))
 all_meta = pd.concat([train_meta, test_meta], axis=0, ignore_index=True, sort=True).reset_index()
 all_meta.drop('index', axis=1, inplace=True)
 n_chunks = 100
 
+# calculate features
 new_data_exact = calc_aggs(train.copy(), True)
 new_data_approx = calc_aggs(train.copy(), False)
 train_meta_exact = pd.merge(train_meta, new_data_exact, 'left', left_on='object_id', right_index=True)
@@ -210,8 +217,9 @@ train_meta_approx = pd.merge(train_meta, new_data_approx, 'left', left_on='objec
 # process training set (not actually used, just to get right shape of dataframe)
 new_data_arr = []
 new_data_arr.append(calc_aggs(train.copy(), True))
+# process test set
 for i in range(n_chunks):
-    df = pd.read_hdf('data\\split_{}\\chunk_{}.hdf5'.format(n_chunks, i), key='file0')
+    df = pd.read_hdf(os.path.join('data', 'split_{}'.format(n_chunks), 'chunk_{}.hdf5'.format(i)), key='file0')
     df.drop('index', axis=1, inplace=True)
     print('Read chunk {}'.format(i))
     new_data_arr.append(calc_aggs(df.copy(), True))
@@ -223,7 +231,8 @@ new_data = pd.concat(new_data_arr, axis=0, sort=True)
 # merge
 all_meta = pd.merge(all_meta, new_data, 'left', left_on='object_id', right_index=True)
 
-dir_name = 'features_{}'.format(dt.datetime.now().strftime('%y%m%d_%H%M'))
+# write output
+dir_name = 'features'
 if not os.path.exists(os.path.join('data', dir_name)):
     os.mkdir(os.path.join('data', dir_name))
 all_meta.to_hdf(os.path.join('data', dir_name, 'all_data.hdf5'), key='file0')

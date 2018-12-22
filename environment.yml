@@ -1,0 +1,10 @@
+name: plasticc-bt
+dependencies:
+ - python=3.6.5
+ - numpy=1.14.3
+ - matplotlib=2.2.2
+ - pytables=3.4.3
+ - pandas=0.23.0
+ - scikit-learn=0.20.0
+ - pip:
+   - lightgbm==2.1.1
